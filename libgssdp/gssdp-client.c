@@ -1045,7 +1045,7 @@ append_header_fields (GList *headers, const gchar *message)
  * gssdp_client_append_header:
  * @client: A #GSSDPClient
  * @name: Header name
- * @value: Header value
+ * @value: (allow-none): Header value
  *
  * Adds a header field to the message sent by this @client. It is intended to
  * be used by clients requiring vendor specific header fields. (If there is an
