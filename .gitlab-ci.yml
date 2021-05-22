@@ -177,7 +177,8 @@ pages:
       - meson doc-build -Dgtk_doc=true
       - ninja -C doc-build gssdp-doc
       - mkdir -p public
-      - mv doc-build/doc/html public/docs
+      - mv doc-build/doc/GSSDP public/GSSDP
+
   artifacts:
     paths:
       - public
@@ -186,4 +187,6 @@ pages:
   only:
     - master
     - /^wip\/.*\/ci.*$/
+    - /^wip\/.*\/.*doc.*$/
+
 

@@ -35,16 +35,3 @@ custom_target(
     install_dir : docs_dir,
 )
 
-#gnome.gtkdoc('gssdp',
-#             main_xml : 'gssdp-docs.xml',
-#             gobject_typesfile : 'gssdp.types',
-#             dependencies : [gssdp, dependencies],
-#             src_dir : ['libgssdp'],
-#             ignore_headers : [
-#                 'gssdp-socket-source.h',
-#                 'gssdp-client-private.h',
-#                 'gssdp-protocol.h',
-#                 'gssdp-pktinfo-message.h',
-#                 'gssdp-net.h'
-#             ],
-#install : true)
