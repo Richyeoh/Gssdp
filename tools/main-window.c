@@ -50,7 +50,7 @@ struct _GSSDPDeviceSnifferMainWindow {
         // Bound child widgets
         GtkWidget *packet_treeview;
         GtkWidget *packet_textview;
-        GtkWidget *capture_button_image;
+        GtkWidget *capture_button;
         GtkWidget *device_treeview;
         GtkWidget *details_scrolled;
         GMenuModel *sniffer_context_menu;
@@ -110,9 +110,7 @@ main_window_set_property (GObject *object,
                                     ? "media-playback-stop-symbolic"
                                     : "media-playback-start-symbolic";
 
-                gtk_image_set_from_icon_name (GTK_IMAGE (self->capture_button_image),
-                                              icon_name,
-                                              GTK_ICON_SIZE_BUTTON);
+                gtk_button_set_icon_name(GTK_BUTTON (self->capture_button), icon_name);
                 break;
         default:
                 G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
@@ -217,8 +215,8 @@ on_ssdp_message (GSSDPClient *ssdp_client,
                 return;
 
         if (gtk_search_bar_get_search_mode (GTK_SEARCH_BAR (self->searchbar))) {
-                const char *filter =
-                        gtk_entry_get_text (GTK_ENTRY (self->address_filter));
+                const char *filter = gtk_editable_get_text (
+                        GTK_EDITABLE (self->address_filter));
                 if (filter != NULL && strcmp (filter, from_ip) != 0)
                         return;
         }
@@ -418,7 +416,7 @@ gssdp_device_sniffer_main_window_class_init (
 
         gtk_widget_class_bind_template_child (widget_class,
                                               GSSDPDeviceSnifferMainWindow,
-                                              capture_button_image);
+                                              capture_button);
 
         gtk_widget_class_bind_template_child (widget_class,
                                               GSSDPDeviceSnifferMainWindow,
@@ -487,6 +485,7 @@ gssdp_device_sniffer_main_window_class_init (
 static void
 on_realize (GtkWidget *self, gpointer user_data)
 {
+#if 0
         double w;
         double h;
 #if GTK_CHECK_VERSION(3, 22, 0)
@@ -506,12 +505,12 @@ on_realize (GtkWidget *self, gpointer user_data)
         w = gdk_screen_width () * 0.75;
         h = gdk_screen_height () * 0.75;
 #endif
-
         int window_width = CLAMP ((int) w, 10, 1000);
         int window_height = CLAMP ((int) h, 10, 800);
+#endif
         gtk_window_set_default_size (GTK_WINDOW (self),
-                                     window_width,
-                                     window_height);
+                                     1000,
+                                     800);
 }
 
 static void
@@ -668,7 +667,7 @@ on_set_address_filter (GSimpleAction *action,
                             PACKET_STORE_COLUMN_IP,
                             &ip_filter,
                             -1);
-        gtk_entry_set_text (GTK_ENTRY (self->address_filter), ip_filter);
+        gtk_editable_set_text (GTK_EDITABLE (self->address_filter), ip_filter);
         g_free (ip_filter);
 
         gtk_search_bar_set_search_mode (GTK_SEARCH_BAR (self->searchbar), TRUE);
@@ -681,47 +680,50 @@ static GActionEntry actions[] = { { "clear-capture", on_clear_capture },
                                   { "set-address-filter",
                                     on_set_address_filter } };
 
-static void
-do_popup_menu (GSSDPDeviceSnifferMainWindow *self, GdkEventButton *event)
-{
-        gtk_menu_popup_at_pointer (GTK_MENU (self->context_menu),
-                                   (event != NULL) ? (GdkEvent *) event
-                                                   : gtk_get_current_event ());
-}
-
 static gboolean
 on_popup_menu (GtkWidget *widget, gpointer user_data)
 {
         GSSDPDeviceSnifferMainWindow *self =
                 GSSDP_DEVICE_SNIFFER_MAIN_WINDOW (user_data);
 
-        do_popup_menu (self, NULL);
+        gtk_popover_set_pointing_to (GTK_POPOVER (self->context_menu), NULL);
+        gtk_popover_popup (GTK_POPOVER (self->context_menu));
 
         return TRUE;
 }
 
-static gboolean
-on_button_release (GtkWidget *widget, GdkEventButton *event, gpointer user_data)
+static void
+on_button_release (GtkGesture *click,
+                   int n_press,
+                   int x,
+                   int y,
+                   gpointer user_data)
 {
         GSSDPDeviceSnifferMainWindow *self =
                 GSSDP_DEVICE_SNIFFER_MAIN_WINDOW (user_data);
 
-        GtkTreeSelection *selection;
+        GdkEvent *event = gtk_gesture_get_last_event (
+                click,
+                gtk_gesture_single_get_current_sequence (
+                        GTK_GESTURE_SINGLE (click)));
+
+        if (!gdk_event_triggers_context_menu (event)) {
+                return;
+        }
+
         GtkTreeModel *model;
         GtkTreeIter iter;
-        if (event->type != GDK_BUTTON_RELEASE || event->button != 3) {
-                return FALSE;
-        }
 
-        selection = gtk_tree_view_get_selection (
+        GtkTreeSelection *selection = gtk_tree_view_get_selection (
                 GTK_TREE_VIEW (self->packet_treeview));
+
         if (!gtk_tree_selection_get_selected (selection, &model, &iter)) {
-                return FALSE;
+                return;
         }
 
-        do_popup_menu (self, event);
-
-        return TRUE;
+        GdkRectangle rect = { x, y, 1, 1 };
+        gtk_popover_set_pointing_to (GTK_POPOVER (self->context_menu), &rect);
+        gtk_popover_popup (GTK_POPOVER (self->context_menu));
 }
 
 static void
@@ -730,9 +732,20 @@ gssdp_device_sniffer_main_window_init (GSSDPDeviceSnifferMainWindow *self)
         gtk_widget_init_template (GTK_WIDGET (self));
 
         self->context_menu =
-                gtk_menu_new_from_model (self->sniffer_context_menu);
+                gtk_popover_menu_new_from_model (self->sniffer_context_menu);
+        gtk_widget_set_parent (self->context_menu, self->packet_treeview);
+        gtk_popover_set_position (GTK_POPOVER (self->context_menu),
+                                  GTK_POS_BOTTOM);
+        gtk_popover_set_has_arrow (GTK_POPOVER (self->context_menu), FALSE);
+        gtk_widget_set_halign (self->context_menu, GTK_ALIGN_START);
 
-        gtk_menu_attach_to_widget(GTK_MENU (self->context_menu), self->packet_treeview, NULL);
+        GtkGesture *click = gtk_gesture_click_new ();
+        gtk_event_controller_set_name (GTK_EVENT_CONTROLLER (click),
+                                       "packet-treeview-click");
+        gtk_gesture_single_set_button (GTK_GESTURE_SINGLE (click), 3);
+        gtk_gesture_single_set_exclusive (GTK_GESTURE_SINGLE (click), TRUE);
+        gtk_widget_add_controller (self->packet_treeview,
+                                   GTK_EVENT_CONTROLLER (click));
 
         g_signal_connect (G_OBJECT (self),
                           "realize",
@@ -746,13 +759,8 @@ gssdp_device_sniffer_main_window_init (GSSDPDeviceSnifferMainWindow *self)
                           G_CALLBACK (on_packet_selected),
                           self);
 
-        g_signal_connect (G_OBJECT (self->packet_treeview),
-                          "popup-menu",
-                          G_CALLBACK (on_popup_menu),
-                          self);
-
-        g_signal_connect (G_OBJECT (self->packet_treeview),
-                          "button-release-event",
+        g_signal_connect (G_OBJECT (click),
+                          "released",
                           G_CALLBACK (on_button_release),
                           self);
 
